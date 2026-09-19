@@ -14,6 +14,9 @@ source("src/flavor.R")
 
 # arg parsing
 source("src/common/cli.R")
+# Phase instrumentation (obkit-events.jsonl, aligned by denet)
+source("src/obkit_logger.R")
+source("src/phases.R")
 p <- arg_parser("CLUST module")
 p <- add_base_args(p)                      # --output_dir, --name
 p <- add_stage_args(p, "CLUST")  # the stage I/O contract
@@ -33,13 +36,17 @@ cat(sprintf("----------------------------------\n"))
 
 
 # Reproducibility
+logger_init(args$output_dir)
+
 set.seed(args$random_seed)
 
 # Load neighbors graph into Seurat Object. Cluster on the connectivities graph
 # (UMAP-style affinities); the distances graph is the flat root layout.
-neighbors_mat <- read_neighbors(args$neighbors_h5, group = "connectivities")
-
-neighbors_graph <- as.Graph(neighbors_mat)
+neighbors_graph <- phase("load", function(attrs) {
+  neighbors_mat <- read_neighbors(args$neighbors_h5, group = "connectivities")
+  attrs$n_cells <- nrow(neighbors_mat)
+  as.Graph(neighbors_mat)
+})
 
 cat("Neighbors graph dimensions:\n")
 print(dim(neighbors_graph))
@@ -59,14 +66,18 @@ algorithm_seurat_id <- flavor_algorithm_id(args$flavor)
 
 
 # Run clustering
-so <- FindClusters(
-  so,
-  algorithm = algorithm_seurat_id,
-  resolution = args$resolution,
-  graph.name = "neighbors",
-  random.seed = args$random_seed,
-  verbose = TRUE
-)
+so <- phase("compute", function(attrs) {
+  attrs$resolution <- args$resolution
+  attrs$flavor <- args$flavor
+  FindClusters(
+    so,
+    algorithm = algorithm_seurat_id,
+    resolution = args$resolution,
+    graph.name = "neighbors",
+    random.seed = args$random_seed,
+    verbose = TRUE
+  )
+})
 
 cat("Running clustering...\n")
 cat("Selected algorithm:", args$flavor, "\n")
@@ -96,6 +107,7 @@ output_file <- file.path(
 cat("Writing output to:\n")
 cat(output_file, "\n\n")
 
+logger_emit("write", "start")
 write.table(
   m_clusters,
   file = output_file,
@@ -106,3 +118,5 @@ write.table(
 )
 
 print(file.info(output_file)[, c("size", "ctime")])
+
+logger_emit("write", "end", attrs = list(path = output_file))
