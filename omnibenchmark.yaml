@@ -4,10 +4,9 @@ entrypoints:
   select: select.R
   integrate: integrate.R
   pca: pca.R
-  pca-prof: denet pca.R
+  pca-prof: prof.sh pca.R
   cluster: cluster.R
-  cluster-prof: denet cluster.R
-
+  cluster-prof: prof.sh cluster.R
 # Shared CLI helpers (R) vendored under src/common/ via `pixi run -e bootstrap sync`.
 templates:
   repo: https://github.com/omni-scrna/boilerplate
