@@ -35,6 +35,13 @@ p <- add_stage_args(p, "PCA")  # the stage I/O contract
 p <- add_argument(p, "--solver", type = "character", help = "solver type")
 p <- add_argument(p, "--n_components", type = "integer", help = "number of PCs")
 p <- add_argument(p, "--random_seed", type = "integer", help = "random seed")
+# irlba controls (approximate solver only), passed through RunPCA's `...`. Unset =
+# irlba's own defaults (work = nv + 7, maxit = 1000, tol = 1e-5). irlba is a
+# Krylov solver run to `tol`, not a randomized one: these do not map onto
+# scanpy/rapids' n_iter / n_oversamples (see the module README).
+p <- add_argument(p, "--irlba_work", type = "integer", help = "irlba working subspace size (default nv + 7)")
+p <- add_argument(p, "--irlba_maxit", type = "integer", help = "irlba max restarts (default 1000)")
+p <- add_argument(p, "--irlba_tol", type = "numeric", help = "irlba convergence tolerance (default 1e-5)")
 args <- parse_args(p)                      # argparser's own parser
 
 if (!(args$solver %in% c("exact", "approximate", "irlba", "random")))
@@ -66,12 +73,11 @@ run_pca <- function(so, X, args, phase) {
     attrs$solver       <- args$solver
     attrs$approx       <- approx
     attrs$n_components <- args$n_components
-    RunPCA(so,
-           features = rownames(X),
-           npcs = args$n_components,
-           approx = approx,
-           seed.use = args$random_seed,
-           verbose = FALSE)
+    irlba_args <- Filter(Negate(is.na), list(work = args$irlba_work, maxit = args$irlba_maxit,
+                                             tol = args$irlba_tol))
+    if (length(irlba_args) && !approx) stop("--irlba_* only apply to --solver approximate", call. = FALSE)
+    do.call(RunPCA, c(list(so, features = rownames(X), npcs = args$n_components, approx = approx,
+                           seed.use = args$random_seed, verbose = FALSE), irlba_args))
   })
 
   dimred    <- so[["pca"]]
