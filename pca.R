@@ -41,8 +41,8 @@ if (!(args$solver %in% c("exact", "approximate", "irlba", "random")))
   stop("Invalid --solver: ", args$solver, " (valid: exact, approximate)")
 
 # tracking stuff
-source(file.path(script_dir, "src", "obkit_logger.R"))
-source(file.path(script_dir, "src", "phases.R"))
+source("src/obkit_logger.R")
+source("src/phases.R")
 
 
 run_pca <- function(so, X, args, phase) {
@@ -86,9 +86,8 @@ run_pca <- function(so, X, args, phase) {
 }
 
 main <- function() {
-  args <- parse_pca_args()
   cat(sprintf("Full command: %s\n", paste(commandArgs(trailingOnly = FALSE), collapse = " ")))
-  for (k in c("output_dir", "name", "input_h5",
+  for (k in c("output_dir", "name", "normalized_selected_h5",
               "solver", "n_components", "random_seed")) {
     cat(sprintf("  %s: %s\n", k, args[[k]]))
   }
@@ -102,7 +101,7 @@ main <- function() {
     # in Seurat's container — sparse-pointer-cheap but allocates metadata
     # (cell IDs as factor levels, etc.). All three steps are "ingest into
     # framework-native form" so they belong in `load`.
-    m_lazy <- TENxMatrix(args$normalized_h5, group = "matrix")
+    m_lazy <- TENxMatrix(args$normalized_selected_h5, group = "matrix")
     m_mem  <- as(m_lazy, "dgCMatrix")
     so     <- CreateSeuratObject(counts = m_mem)
     so     <- SetAssayData(so, layer = "data", new.data = m_mem)
@@ -120,7 +119,7 @@ main <- function() {
               nrow(res$loadings),  ncol(res$loadings)))
 
   phase("write", function(attrs) {
-    out_pcas <- file.path(args$output_dir, sprintf("%s_pcas.tsv", args$name))
+    out_pcas <- file.path(args$output_dir, sprintf("%s_embedding.tsv", args$name))
     fwrite(data.frame(cell_id = rownames(res$embedding), res$embedding), out_pcas,
            sep = "\t", quote = FALSE, row.names = FALSE)
     out_loadings <- file.path(args$output_dir, sprintf("%s_loadings.tsv", args$name))
